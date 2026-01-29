@@ -3,73 +3,139 @@
 <head>
 <meta charset="UTF-8">
 <title>Separador Automático por Valor</title>
+
 <style>
+* {
+  box-sizing: border-box;
+}
+
 body {
   font-family: Arial, sans-serif;
-  background: #f2f4f7;
-  padding: 20px;
+  background: #eef1f4;
+  margin: 0;
+  padding: 0;
 }
-h1 { color: #2c3e50; }
+
+.container {
+  max-width: 1100px;
+  margin: 30px auto;
+  background: #ffffff;
+  padding: 25px;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+h1 {
+  margin-top: 0;
+  color: #2c3e50;
+  text-align: center;
+}
+
+.section {
+  margin-bottom: 20px;
+}
+
+label {
+  font-weight: bold;
+  display: block;
+  margin-bottom: 6px;
+}
+
+input[type="file"] {
+  padding: 6px;
+}
 
 textarea {
   width: 100%;
-  height: 150px;
+  height: 180px;
+  padding: 10px;
   font-family: monospace;
+  resize: vertical;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 button {
-  margin-top: 10px;
-  padding: 10px 16px;
+  padding: 10px 18px;
   font-size: 15px;
   cursor: pointer;
+  border: none;
+  border-radius: 5px;
+  background: #3498db;
+  color: #fff;
+}
+
+button:hover {
+  background: #2980b9;
 }
 
 #blocos {
-  margin-top: 20px;
+  margin-top: 25px;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 15px;
 }
 
 .bloco {
-  background: #fff;
   border: 2px solid #3498db;
   border-radius: 8px;
-  padding: 10px;
+  background: #f9fbfd;
 }
 
 .bloco h3 {
-  margin: 0 0 8px 0;
+  margin: 0;
+  padding: 8px;
   background: #3498db;
-  color: white;
-  padding: 6px;
-  border-radius: 4px;
+  color: #fff;
   font-size: 16px;
+  text-align: center;
 }
 
 .bloco pre {
-  white-space: pre-wrap;
+  padding: 10px;
   font-size: 12px;
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow: auto;
 }
+
 .total {
+  padding: 8px;
+  background: #ecf0f1;
+  text-align: center;
   font-weight: bold;
-  margin-top: 5px;
 }
 </style>
 </head>
+
 <body>
 
-<h1>📊 Separador Automático de Valores</h1>
+<div class="container">
 
-<p>Cole os dados ou envie um arquivo:</p>
+  <h1>📊 Separador Automático de Cancelamentos</h1>
 
-<input type="file" id="arquivo"><br><br>
-<textarea id="input" placeholder="Cole os dados aqui..."></textarea><br>
+  <div class="section">
+    <label>Upload de arquivo (.txt ou .csv)</label>
+    <input type="file" id="arquivo">
+  </div>
 
-<button onclick="processar()">Processar</button>
-<button onclick="baixar()">Baixar CSV</button>
+  <div class="section">
+    <label>Ou cole os dados abaixo</label>
+    <textarea id="input" placeholder="Cole aqui os dados..."></textarea>
+  </div>
 
-<div id="blocos"></div>
+  <div class="section actions">
+    <button onclick="processar()">Processar</button>
+    <button onclick="baixar()">Baixar CSV</button>
+  </div>
+
+  <div id="blocos"></div>
+
+</div>
 
 <script>
 let resultadoCSV = "";
@@ -109,7 +175,6 @@ function processar(){
     totalGeral++;
   });
 
-  // montar CSV
   resultadoCSV = cabecalho + "\n";
 
   const blocosDiv = document.getElementById("blocos");
@@ -119,10 +184,9 @@ function processar(){
     .sort((a,b)=>parseFloat(a)-parseFloat(b))
     .forEach(valor=>{
       resultadoCSV += `### INICIO_VALOR_${valor}\n`;
-      grupos[valor].forEach(l=> resultadoCSV += l + "\n");
+      grupos[valor].forEach(l => resultadoCSV += l + "\n");
       resultadoCSV += `### TOTAL_VALOR_${valor},,,,,,,${grupos[valor].length}\n`;
 
-      // bloco visual
       const bloco = document.createElement("div");
       bloco.className = "bloco";
       bloco.innerHTML = `
