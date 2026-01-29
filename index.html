@@ -2,107 +2,148 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Separador Dinâmico por Valor</title>
+<title>Separador Automático por Valor</title>
 <style>
 body {
   font-family: Arial, sans-serif;
-  background: #f4f6f8;
+  background: #f2f4f7;
   padding: 20px;
 }
-h1 {
-  color: #2c3e50;
-}
+h1 { color: #2c3e50; }
+
 textarea {
   width: 100%;
-  height: 220px;
-  padding: 10px;
+  height: 150px;
   font-family: monospace;
 }
+
 button {
   margin-top: 10px;
   padding: 10px 16px;
-  font-size: 16px;
+  font-size: 15px;
   cursor: pointer;
 }
-pre {
+
+#blocos {
+  margin-top: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 15px;
+}
+
+.bloco {
   background: #fff;
-  padding: 15px;
-  border: 1px solid #ccc;
+  border: 2px solid #3498db;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.bloco h3 {
+  margin: 0 0 8px 0;
+  background: #3498db;
+  color: white;
+  padding: 6px;
+  border-radius: 4px;
+  font-size: 16px;
+}
+
+.bloco pre {
   white-space: pre-wrap;
+  font-size: 12px;
+}
+.total {
+  font-weight: bold;
+  margin-top: 5px;
 }
 </style>
 </head>
 <body>
 
-<h1>📊 Separador Automático de Cancelamentos</h1>
+<h1>📊 Separador Automático de Valores</h1>
 
-<p>Cole os dados abaixo:</p>
-<textarea id="input"></textarea>
+<p>Cole os dados ou envie um arquivo:</p>
 
-<br>
+<input type="file" id="arquivo"><br><br>
+<textarea id="input" placeholder="Cole os dados aqui..."></textarea><br>
+
 <button onclick="processar()">Processar</button>
 <button onclick="baixar()">Baixar CSV</button>
 
-<h2>Resultado</h2>
-<pre id="output"></pre>
+<div id="blocos"></div>
 
 <script>
-let resultadoFinal = "";
+let resultadoCSV = "";
 
-function normalizarValor(valor) {
-  return valor.replace("R$", "").replace(".", "").replace(",", ".").trim();
+document.getElementById("arquivo").addEventListener("change", function(e){
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => document.getElementById("input").value = e.target.result;
+  reader.readAsText(file);
+});
+
+function normalizarValor(v){
+  return v.replace("R$","").replace(/\./g,"").replace(",",".").trim();
 }
 
-function processar() {
+function processar(){
   const texto = document.getElementById("input").value.trim();
-  if (!texto) return alert("Cole os dados primeiro");
+  if(!texto) return alert("Informe os dados ou envie um arquivo.");
 
   const linhas = texto.split("\n");
-  const cabecalho = linhas[0];
+  const cabecalho = linhas[0].replace(/\t/g,",");
   const dados = linhas.slice(1);
 
   const grupos = {};
   let totalGeral = 0;
 
-  dados.forEach(linha => {
-    const colunas = linha.split("\t");
-    const valorBruto = colunas[colunas.length - 1];
-    if (!valorBruto) return;
+  dados.forEach(linha=>{
+    const cols = linha.split("\t");
+    if(cols.length < 2) return;
 
-    const valor = normalizarValor(valorBruto);
+    const valor = normalizarValor(cols[cols.length-1]);
+    const novaLinha = cols.slice(0,-1).join(",") + "," + valor;
 
-    if (!grupos[valor]) grupos[valor] = [];
-    grupos[valor].push(colunas.slice(0, -1).join(",") + "," + valor);
-
+    if(!grupos[valor]) grupos[valor] = [];
+    grupos[valor].push(novaLinha);
     totalGeral++;
   });
 
-  resultadoFinal = cabecalho.replace(/\t/g, ",") + "\n";
+  // montar CSV
+  resultadoCSV = cabecalho + "\n";
+
+  const blocosDiv = document.getElementById("blocos");
+  blocosDiv.innerHTML = "";
 
   Object.keys(grupos)
-    .sort((a, b) => parseFloat(a) - parseFloat(b))
-    .forEach(valor => {
-      resultadoFinal += `### INICIO_VALOR_${valor}\n`;
-      grupos[valor].forEach(l => resultadoFinal += l + "\n");
-      resultadoFinal += `### TOTAL_VALOR_${valor},,,,,,,${grupos[valor].length}\n`;
+    .sort((a,b)=>parseFloat(a)-parseFloat(b))
+    .forEach(valor=>{
+      resultadoCSV += `### INICIO_VALOR_${valor}\n`;
+      grupos[valor].forEach(l=> resultadoCSV += l + "\n");
+      resultadoCSV += `### TOTAL_VALOR_${valor},,,,,,,${grupos[valor].length}\n`;
+
+      // bloco visual
+      const bloco = document.createElement("div");
+      bloco.className = "bloco";
+      bloco.innerHTML = `
+        <h3>Valor ${valor}</h3>
+        <pre>${grupos[valor].join("\n")}</pre>
+        <div class="total">Total: ${grupos[valor].length}</div>
+      `;
+      blocosDiv.appendChild(bloco);
     });
 
-  resultadoFinal += `### TOTAL_GERAL,,,,,,,${totalGeral}`;
-
-  document.getElementById("output").textContent = resultadoFinal;
+  resultadoCSV += `### TOTAL_GERAL,,,,,,,${totalGeral}`;
 }
 
-function baixar() {
-  if (!resultadoFinal) return alert("Nenhum dado processado");
-
-  const blob = new Blob([resultadoFinal], { type: "text/csv;charset=utf-8;" });
+function baixar(){
+  if(!resultadoCSV) return alert("Nada processado ainda.");
+  const blob = new Blob([resultadoCSV], {type:"text/csv;charset=utf-8;"});
   const url = URL.createObjectURL(blob);
-
   const a = document.createElement("a");
   a.href = url;
-  a.download = "cancelamentos_separados.csv";
+  a.download = "separado_por_valor.csv";
   a.click();
-
   URL.revokeObjectURL(url);
 }
 </script>
