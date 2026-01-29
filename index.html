@@ -143,7 +143,10 @@ function detectarSeparador(linhaCabecalho){
 }
 
 function normalizarValor(v){
-  return v.replace("R$","").replace(/\./g,"").replace(",",".").trim();
+  return v.replace("R$","")
+          .replace(/\./g,"")
+          .replace(",",".")
+          .trim();
 }
 
 function processar(){
@@ -165,10 +168,14 @@ function processar(){
     if(!linha.trim()) return;
 
     let cols = linha.split(separador);
-
     while(cols.length < qtdColunas) cols.push("");
 
-    const valor = normalizarValor(cols[qtdColunas-1]);
+    const valorTexto = cols[qtdColunas-1];
+    const valor = normalizarValor(valorTexto);
+
+    // ignorar valores zerados ou inválidos
+    if (!valor || parseFloat(valor) === 0 || isNaN(parseFloat(valor))) return;
+
     const novaLinha = cols.slice(0, qtdColunas-1).join(",") + "," + valor;
 
     if(!grupos[valor]) grupos[valor] = [];
