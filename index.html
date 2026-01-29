@@ -5,9 +5,7 @@
 <title>Separador Automático por Valor</title>
 
 <style>
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 body {
   font-family: Arial, sans-serif;
@@ -31,18 +29,12 @@ h1 {
   text-align: center;
 }
 
-.section {
-  margin-bottom: 20px;
-}
+.section { margin-bottom: 20px; }
 
 label {
   font-weight: bold;
   display: block;
   margin-bottom: 6px;
-}
-
-input[type="file"] {
-  padding: 6px;
 }
 
 textarea {
@@ -69,9 +61,7 @@ button {
   color: #fff;
 }
 
-button:hover {
-  background: #2980b9;
-}
+button:hover { background: #2980b9; }
 
 #blocos {
   margin-top: 25px;
@@ -99,7 +89,7 @@ button:hover {
   padding: 10px;
   font-size: 12px;
   white-space: pre-wrap;
-  max-height: 200px;
+  max-height: 220px;
   overflow: auto;
 }
 
@@ -115,8 +105,7 @@ button:hover {
 <body>
 
 <div class="container">
-
-  <h1>📊 Separador Automático de Cancelamentos</h1>
+  <h1>📊 Separador Automático de Valores</h1>
 
   <div class="section">
     <label>Upload de arquivo (.txt ou .csv)</label>
@@ -134,7 +123,6 @@ button:hover {
   </div>
 
   <div id="blocos"></div>
-
 </div>
 
 <script>
@@ -148,6 +136,12 @@ document.getElementById("arquivo").addEventListener("change", function(e){
   reader.readAsText(file);
 });
 
+function detectarSeparador(linhaCabecalho){
+  if (linhaCabecalho.includes("\t")) return "\t";
+  if (linhaCabecalho.includes(";")) return ";";
+  return ",";
+}
+
 function normalizarValor(v){
   return v.replace("R$","").replace(/\./g,"").replace(",",".").trim();
 }
@@ -156,26 +150,33 @@ function processar(){
   const texto = document.getElementById("input").value.trim();
   if(!texto) return alert("Informe os dados ou envie um arquivo.");
 
-  const linhas = texto.split("\n");
-  const cabecalho = linhas[0].replace(/\t/g,",");
-  const dados = linhas.slice(1);
+  const linhas = texto.split(/\r?\n/);
+  const separador = detectarSeparador(linhas[0]);
 
+  const cabCols = linhas[0].split(separador);
+  const qtdColunas = cabCols.length;
+  const cabecalhoCSV = cabCols.join(",");
+
+  const dados = linhas.slice(1);
   const grupos = {};
   let totalGeral = 0;
 
   dados.forEach(linha=>{
-    const cols = linha.split("\t");
-    if(cols.length < 2) return;
+    if(!linha.trim()) return;
 
-    const valor = normalizarValor(cols[cols.length-1]);
-    const novaLinha = cols.slice(0,-1).join(",") + "," + valor;
+    let cols = linha.split(separador);
+
+    while(cols.length < qtdColunas) cols.push("");
+
+    const valor = normalizarValor(cols[qtdColunas-1]);
+    const novaLinha = cols.slice(0, qtdColunas-1).join(",") + "," + valor;
 
     if(!grupos[valor]) grupos[valor] = [];
     grupos[valor].push(novaLinha);
     totalGeral++;
   });
 
-  resultadoCSV = cabecalho + "\n";
+  resultadoCSV = cabecalhoCSV + "\n";
 
   const blocosDiv = document.getElementById("blocos");
   blocosDiv.innerHTML = "";
@@ -183,9 +184,14 @@ function processar(){
   Object.keys(grupos)
     .sort((a,b)=>parseFloat(a)-parseFloat(b))
     .forEach(valor=>{
-      resultadoCSV += `### INICIO_VALOR_${valor}\n`;
+      resultadoCSV += `### INICIO_VALOR_${valor}` +
+                      ",".repeat(qtdColunas-1) + "\n";
+
       grupos[valor].forEach(l => resultadoCSV += l + "\n");
-      resultadoCSV += `### TOTAL_VALOR_${valor},,,,,,,${grupos[valor].length}\n`;
+
+      resultadoCSV += `### TOTAL_VALOR_${valor}` +
+                      ",".repeat(qtdColunas-2) +
+                      `,${grupos[valor].length}\n`;
 
       const bloco = document.createElement("div");
       bloco.className = "bloco";
@@ -197,17 +203,22 @@ function processar(){
       blocosDiv.appendChild(bloco);
     });
 
-  resultadoCSV += `### TOTAL_GERAL,,,,,,,${totalGeral}`;
+  resultadoCSV += `### TOTAL_GERAL` +
+                  ",".repeat(qtdColunas-2) +
+                  `,${totalGeral}`;
 }
 
 function baixar(){
   if(!resultadoCSV) return alert("Nada processado ainda.");
+
   const blob = new Blob([resultadoCSV], {type:"text/csv;charset=utf-8;"});
   const url = URL.createObjectURL(blob);
+
   const a = document.createElement("a");
   a.href = url;
   a.download = "separado_por_valor.csv";
   a.click();
+
   URL.revokeObjectURL(url);
 }
 </script>
