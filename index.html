@@ -1,6 +1,73 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Separador Automático de Valores</title>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+<style>
+* { box-sizing: border-box; }
+body { font-family: Arial; background:#eef1f4; margin:0; }
+.container {
+  max-width:1200px; margin:30px auto; background:#fff;
+  padding:25px; border-radius:10px;
+  box-shadow:0 4px 12px rgba(0,0,0,0.1);
+}
+h1 { text-align:center; margin-top:0; }
+
+textarea { width:100%; height:160px; font-family:monospace; padding:10px; }
+button {
+  padding:10px 18px; border:none; border-radius:5px;
+  background:#3498db; color:white; cursor:pointer;
+}
+button:hover { background:#2980b9; }
+
+.actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
+
+#painelResumo {
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:10px; margin-bottom:20px;
+}
+.cardResumo {
+  background:#2c3e50; color:white; padding:10px;
+  border-radius:6px; text-align:center;
+}
+.cardResumo span { font-size:22px; font-weight:bold; display:block; }
+
+#blocos {
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
+  gap:15px; margin-top:20px;
+}
+.bloco { border:2px solid #3498db; border-radius:8px; background:#f9fbfd; }
+.bloco h3 { margin:0; background:#3498db; color:white; padding:8px; text-align:center; }
+.bloco pre { padding:10px; font-size:12px; max-height:220px; overflow:auto; }
+.total { background:#ecf0f1; padding:8px; text-align:center; font-weight:bold; }
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<h1>📊 Separador Automático de Valores</h1>
+
+<div id="painelResumo"></div>
+
+<input type="file" id="arquivo"><br><br>
+<textarea id="input" placeholder="Cole os dados aqui..."></textarea>
+
+<div class="actions">
+  <button onclick="processar()">Processar</button>
+  <button onclick="baixarCSV()">Baixar CSV</button>
+  <button onclick="baixarExcel()">Baixar Excel</button>
+</div>
+
+<div id="blocos"></div>
+</div>
+
 <script>
-let tabelaExcel = {};
-let resumoExcel = [];
+let resultadoCSV = "";
+let tabelaExcel = [];
 
 document.getElementById("arquivo").addEventListener("change", e=>{
   const file = e.target.files[0];
@@ -29,8 +96,8 @@ function processar(){
   const cab = linhas[0].split(sep);
   const ncol = cab.length;
 
-  tabelaExcel = {};
-  resumoExcel = [];
+  tabelaExcel = [cab];
+  const grupos = {};
   let totalGeral = 0;
 
   linhas.slice(1).forEach(l=>{
@@ -39,69 +106,72 @@ function processar(){
     while(cols.length < ncol) cols.push("");
 
     const valor = normalizarValor(cols[ncol-1]);
-    if(!valor || parseFloat(valor) === 0 || isNaN(valor)) return;
+    if(!valor || parseFloat(valor)===0 || isNaN(valor)) return;
 
-    if(!tabelaExcel[valor]) tabelaExcel[valor] = [cab];
-    tabelaExcel[valor].push(cols.slice(0,ncol-1).concat(valor));
-
+    if(!grupos[valor]) grupos[valor]=[];
+    grupos[valor].push(cols);
     totalGeral++;
   });
 
-  resumoExcel.push(["Valor", "Quantidade"]);
-  Object.keys(tabelaExcel).sort((a,b)=>a-b).forEach(v=>{
-    resumoExcel.push([v, tabelaExcel[v].length - 1]);
-  });
-  resumoExcel.push(["TOTAL GERAL", totalGeral]);
+  resultadoCSV = cab.join(",")+"\n";
 
-  montarPainelVisual();
+  const blocosDiv = document.getElementById("blocos");
+  const painel = document.getElementById("painelResumo");
+  blocosDiv.innerHTML="";
+  painel.innerHTML="";
+
+  Object.keys(grupos).sort((a,b)=>a-b).forEach(valor=>{
+    const qtd = grupos[valor].length;
+
+    // painel resumo
+    painel.innerHTML += `<div class="cardResumo">Valor ${valor}<span>${qtd}</span></div>`;
+
+    // marcador início
+    resultadoCSV += `### INICIO_VALOR_${valor}` + ",".repeat(ncol-1) + "\n";
+    tabelaExcel.push([`INICIO_VALOR_${valor}`]);
+
+    grupos[valor].forEach(cols=>{
+      const linhaCSV = cols.slice(0,ncol-1).join(",")+","+valor;
+      resultadoCSV += linhaCSV+"\n";
+      tabelaExcel.push(cols.slice(0,ncol-1).concat(valor));
+    });
+
+    resultadoCSV += `### TOTAL_VALOR_${valor}` + ",".repeat(ncol-2) + `,${qtd}\n`;
+    tabelaExcel.push([`TOTAL_VALOR_${valor}`, "", "", "", "", "", qtd]);
+
+    // bloco visual
+    const bloco = document.createElement("div");
+    bloco.className="bloco";
+    bloco.innerHTML = `<h3>Valor ${valor}</h3>
+      <pre>${grupos[valor].map(c=>c.join(" | ")).join("\n")}</pre>
+      <div class="total">Total: ${qtd}</div>`;
+    blocosDiv.appendChild(bloco);
+  });
+
+  painel.innerHTML += `<div class="cardResumo" style="background:#27ae60">
+                         TOTAL GERAL<span>${totalGeral}</span></div>`;
+
+  resultadoCSV += `### TOTAL_GERAL` + ",".repeat(ncol-2) + `,${totalGeral}`;
+  tabelaExcel.push([`TOTAL_GERAL`, "", "", "", "", "", totalGeral]);
 }
 
-function montarPainelVisual(){
-  const painel = document.getElementById("painelResumo");
-  const blocos = document.getElementById("blocos");
-  painel.innerHTML = "";
-  blocos.innerHTML = "";
-
-  Object.keys(tabelaExcel).sort((a,b)=>a-b).forEach(v=>{
-    painel.innerHTML += `
-      <div class="cardResumo">Valor ${v}<span>${tabelaExcel[v].length - 1}</span></div>
-    `;
-
-    const bloco = document.createElement("div");
-    bloco.className = "bloco";
-    bloco.innerHTML = `
-      <h3>Valor ${v}</h3>
-      <pre>${tabelaExcel[v].slice(1).map(l=>l.join(" | ")).join("\n")}</pre>
-      <div class="total">Total: ${tabelaExcel[v].length - 1}</div>
-    `;
-    blocos.appendChild(bloco);
-  });
-
-  painel.innerHTML += `
-    <div class="cardResumo" style="background:#27ae60">
-      TOTAL GERAL<span>${resumoExcel[resumoExcel.length-1][1]}</span>
-    </div>
-  `;
+function baixarCSV(){
+  if(!resultadoCSV) return alert("Nada processado.");
+  const blob = new Blob([resultadoCSV], {type:"text/csv"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href=url; a.download="separado_por_valor.csv"; a.click();
+  URL.revokeObjectURL(url);
 }
 
 function baixarExcel(){
-  if(Object.keys(tabelaExcel).length === 0) {
-    alert("Nada processado.");
-    return;
-  }
+  if(tabelaExcel.length===0) return alert("Nada processado.");
 
+  const ws = XLSX.utils.aoa_to_sheet(tabelaExcel);
   const wb = XLSX.utils.book_new();
-
-  // Aba Resumo
-  const wsResumo = XLSX.utils.aoa_to_sheet(resumoExcel);
-  XLSX.utils.book_append_sheet(wb, wsResumo, "Resumo");
-
-  // Abas por valor
-  Object.keys(tabelaExcel).sort((a,b)=>a-b).forEach(v=>{
-    const ws = XLSX.utils.aoa_to_sheet(tabelaExcel[v]);
-    XLSX.utils.book_append_sheet(wb, ws, `Valor_${v}`);
-  });
-
-  XLSX.writeFile(wb, "relatorio_cancelamentos.xlsx");
+  XLSX.utils.book_append_sheet(wb, ws, "Separado");
+  XLSX.writeFile(wb, "separado_por_valor.xlsx");
 }
 </script>
+</body>
+</html>
