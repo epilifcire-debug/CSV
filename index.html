@@ -21,14 +21,12 @@ h1, h3 {
   text-align: center;
   margin-top: 0;
 }
-
 textarea {
   width: 100%;
   height: 220px;
   font-family: monospace;
   padding: 10px;
 }
-
 button {
   padding: 10px 16px;
   border: none;
@@ -40,7 +38,6 @@ button {
 button:hover {
   background: #0056b3;
 }
-
 .actions {
   margin-top: 15px;
   display: flex;
@@ -48,14 +45,12 @@ button:hover {
   justify-content: center;
   flex-wrap: wrap;
 }
-
 .painel {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 10px;
   margin: 20px 0;
 }
-
 .card {
   background: #2c3e50;
   color: white;
@@ -96,18 +91,16 @@ button:hover {
 </div>
 
 <script>
-let csvFinal = [];
-let resumoLoteValor = {};
-let totalFinanceiro = 0;
-let totalItens = 0;
+/* ================= UTILIDADES ================= */
 
-document.getElementById("arquivo").addEventListener("change", e => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const r = new FileReader();
-  r.onload = ev => document.getElementById("input").value = ev.target.result;
-  r.readAsText(file);
-});
+function formatarMoeda(valor) {
+  return valor.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
 
 function detectarSeparador(l) {
   if (l.includes("\t")) return "\t";
@@ -133,6 +126,25 @@ function extrairDataCompra(codigo) {
   return "";
 }
 
+/* ================= VARIÁVEIS ================= */
+
+let csvFinal = [];
+let resumoLoteValor = {};
+let totalFinanceiro = 0;
+let totalItens = 0;
+
+/* ================= UPLOAD ================= */
+
+document.getElementById("arquivo").addEventListener("change", e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const r = new FileReader();
+  r.onload = ev => document.getElementById("input").value = ev.target.result;
+  r.readAsText(file);
+});
+
+/* ================= PROCESSAMENTO ================= */
+
 function processar() {
   const texto = document.getElementById("input").value.trim();
   if (!texto) return alert("Informe os dados.");
@@ -147,10 +159,9 @@ function processar() {
 
   linhas.forEach(linha => {
     if (!linha.trim()) return;
-
     const cols = linha.split(sep);
 
-    // Valor
+    // VALOR
     let valor = null;
     for (let i = cols.length - 1; i >= 0; i--) {
       const v = normalizarValor(cols[i]);
@@ -159,33 +170,31 @@ function processar() {
         break;
       }
     }
-    if (!valor || valor === 0) return;
+    if (!valor || isNaN(valor) || valor === 0) return;
 
-    // Código
+    // CÓDIGO
     let codigo = "";
     cols.forEach(c => {
       const num = c.replace(/\D/g, "");
       if (num.length >= 8 && num.length > codigo.length) codigo = num;
     });
 
-    // Lote
+    // LOTE
     let lote = "";
     cols.forEach(c => {
       if (/lote/i.test(c)) lote = c.trim();
     });
 
-    // Datas
+    // DATAS
     const dataCompra = extrairDataCompra(codigo);
     let dataCancel = "";
     cols.forEach(c => {
       if (/\d{2}\/\d{2}\/\d{4}/.test(c)) dataCancel = c.substring(0,10);
     });
 
-    // CSV
     csvFinal.push([dataCompra, dataCancel, codigo, lote, valor]);
 
-    // Resumo por lote + valor
-    const chave = `${lote} | R$ ${valor}`;
+    const chave = `${lote} | ${formatarMoeda(valor)}`;
     resumoLoteValor[chave] = (resumoLoteValor[chave] || 0) + 1;
 
     totalFinanceiro += valor;
@@ -194,6 +203,8 @@ function processar() {
 
   montarPainel();
 }
+
+/* ================= PAINÉIS ================= */
 
 function montarPainel() {
   const painel = document.getElementById("painelLoteValor");
@@ -204,7 +215,8 @@ function montarPainel() {
       <div class="card">
         ${k}
         <span>${resumoLoteValor[k]} cancelamentos</span>
-      </div>`;
+      </div>
+    `;
   });
 
   document.getElementById("painelFinanceiro").innerHTML = `
@@ -214,9 +226,12 @@ function montarPainel() {
     </div>
     <div class="card total">
       Total financeiro perdido
-      <span>R$ ${totalFinanceiro.toFixed(2).replace(".",",")}</span>
-    </div>`;
+      <span>${formatarMoeda(totalFinanceiro)}</span>
+    </div>
+  `;
 }
+
+/* ================= CSV ================= */
 
 function baixarCSV() {
   if (csvFinal.length <= 1) return alert("Nada processado.");
@@ -230,5 +245,6 @@ function baixarCSV() {
   URL.revokeObjectURL(url);
 }
 </script>
+
 </body>
 </html>
