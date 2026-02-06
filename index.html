@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <title>Análise de Cancelamentos</title>
 
-<!-- LIB XLSX -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
 <style>
@@ -147,7 +146,7 @@ document.getElementById("arquivo").addEventListener("change", e => {
   r.readAsText(file);
 });
 
-/* ================= PROCESSAMENTO ================= */
+/* ================= PROCESSAR ================= */
 
 function processar() {
   const texto = document.getElementById("input").value.trim();
@@ -165,7 +164,6 @@ function processar() {
     if (!linha.trim()) return;
     const cols = linha.split(sep);
 
-    // VALOR
     let valor = null;
     for (let i = cols.length - 1; i >= 0; i--) {
       const v = normalizarValor(cols[i]);
@@ -176,20 +174,17 @@ function processar() {
     }
     if (!valor || isNaN(valor) || valor === 0) return;
 
-    // CÓDIGO
     let codigo = "";
     cols.forEach(c => {
       const num = c.replace(/\D/g, "");
       if (num.length >= 8 && num.length > codigo.length) codigo = num;
     });
 
-    // LOTE
     let lote = "";
     cols.forEach(c => {
       if (/lote/i.test(c)) lote = c.trim();
     });
 
-    // DATAS
     const dataCompra = extrairDataCompra(codigo);
     let dataCancel = "";
     cols.forEach(c => {
@@ -213,14 +208,12 @@ function processar() {
 function montarPainel() {
   const painel = document.getElementById("painelLoteValor");
   painel.innerHTML = "";
-
   Object.keys(resumoLoteValor).forEach(k => {
     painel.innerHTML += `
       <div class="card">
         ${k}
         <span>${resumoLoteValor[k]} cancelamentos</span>
-      </div>
-    `;
+      </div>`;
   });
 
   document.getElementById("painelFinanceiro").innerHTML = `
@@ -231,8 +224,7 @@ function montarPainel() {
     <div class="card total">
       Total financeiro perdido
       <span>${formatarMoeda(totalFinanceiro)}</span>
-    </div>
-  `;
+    </div>`;
 }
 
 /* ================= CSV ================= */
@@ -254,23 +246,42 @@ function baixarCSV() {
 function baixarExcel() {
   if (csvFinal.length <= 1) return alert("Nada processado.");
 
-  const dadosSheet = XLSX.utils.aoa_to_sheet(csvFinal);
+  const dados = [...csvFinal];
+  dados.push(["","","","TOTAL",{ f:`SUM(E2:E${dados.length})` }]);
 
-  const resumo = [["Lote","Valor","Quantidade","Total Financeiro"]];
+  const dadosSheet = XLSX.utils.aoa_to_sheet(dados);
+  const rangeDados = XLSX.utils.decode_range(dadosSheet["!ref"]);
+  for (let r = 1; r <= rangeDados.e.r; r++) {
+    const cell = XLSX.utils.encode_cell({ r, c: 4 });
+    if (dadosSheet[cell]) dadosSheet[cell].z = '"R$" #,##0.00';
+  }
+
+  const resumo = [["Lote","Quantidade","Valor Unitário","Total Financeiro"]];
+  const controle = {};
+
   Object.keys(resumoLoteValor).forEach(k => {
-    const partes = k.split(" | ");
-    const lote = partes[0];
-    const valor = parseFloat(partes[1].replace("R$","").replace(".","").replace(",","."));
-    const qtd = resumoLoteValor[k];
-    resumo.push([lote, valor, qtd, qtd * valor]);
+    const [lote, valorTxt] = k.split(" | ");
+    const valor = parseFloat(valorTxt.replace("R$","").replace(".","").replace(",","."));
+    if (!controle[lote]) controle[lote] = { qtd:0, valor };
+    controle[lote].qtd += resumoLoteValor[k];
+  });
+
+  Object.keys(controle).forEach(lote => {
+    resumo.push([lote, controle[lote].qtd, controle[lote].valor, controle[lote].qtd * controle[lote].valor]);
   });
 
   const resumoSheet = XLSX.utils.aoa_to_sheet(resumo);
+  const rangeResumo = XLSX.utils.decode_range(resumoSheet["!ref"]);
+  for (let r = 1; r <= rangeResumo.e.r; r++) {
+    ["C","D"].forEach(col => {
+      const cell = col + (r + 1);
+      if (resumoSheet[cell]) resumoSheet[cell].z = '"R$" #,##0.00';
+    });
+  }
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, dadosSheet, "Dados");
   XLSX.utils.book_append_sheet(wb, resumoSheet, "Resumo");
-
   XLSX.writeFile(wb, "cancelamentos_dashboard.xlsx");
 }
 </script>
