@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <title>Análise de Cancelamentos</title>
 
+<!-- LIB XLSX -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
 <style>
 body {
   font-family: Arial, sans-serif;
@@ -85,7 +88,8 @@ button:hover {
 
 <div class="actions">
   <button onclick="processar()">Processar</button>
-  <button onclick="baixarCSV()">Baixar CSV (Análise)</button>
+  <button onclick="baixarCSV()">Baixar CSV</button>
+  <button onclick="baixarExcel()">Baixar Excel (.XLSX)</button>
 </div>
 
 </div>
@@ -240,9 +244,34 @@ function baixarCSV() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "cancelamentos_analise_completa.csv";
+  a.download = "cancelamentos_analise.csv";
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/* ================= EXCEL ================= */
+
+function baixarExcel() {
+  if (csvFinal.length <= 1) return alert("Nada processado.");
+
+  const dadosSheet = XLSX.utils.aoa_to_sheet(csvFinal);
+
+  const resumo = [["Lote","Valor","Quantidade","Total Financeiro"]];
+  Object.keys(resumoLoteValor).forEach(k => {
+    const partes = k.split(" | ");
+    const lote = partes[0];
+    const valor = parseFloat(partes[1].replace("R$","").replace(".","").replace(",","."));
+    const qtd = resumoLoteValor[k];
+    resumo.push([lote, valor, qtd, qtd * valor]);
+  });
+
+  const resumoSheet = XLSX.utils.aoa_to_sheet(resumo);
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, dadosSheet, "Dados");
+  XLSX.utils.book_append_sheet(wb, resumoSheet, "Resumo");
+
+  XLSX.writeFile(wb, "cancelamentos_dashboard.xlsx");
 }
 </script>
 
