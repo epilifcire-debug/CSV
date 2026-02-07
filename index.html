@@ -2,71 +2,106 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Análise de Cancelamentos</title>
+<title>Dashboard de Cancelamentos</title>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
+:root {
+  --bg: #0f172a;
+  --card: #1e293b;
+  --accent: #22c55e;
+  --accent2: #38bdf8;
+  --text: #e5e7eb;
+  --muted: #94a3b8;
+  --border: #334155;
+}
+
 body {
-  font-family: Arial, sans-serif;
-  background: #f4f6f8;
   margin: 0;
+  font-family: Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
 }
+
 .container {
-  max-width: 1300px;
-  margin: 30px auto;
-  background: #fff;
-  padding: 25px;
-  border-radius: 8px;
+  max-width: 1500px;
+  margin: 20px auto;
+  padding: 24px;
 }
-h1, h3 {
+
+h1 {
   text-align: center;
-  margin-top: 0;
+  margin-bottom: 10px;
 }
+
 textarea {
   width: 100%;
-  height: 220px;
-  font-family: monospace;
+  height: 180px;
+  background: #020617;
+  color: var(--text);
+  border: 1px solid var(--border);
   padding: 10px;
+  border-radius: 6px;
+  font-family: monospace;
 }
+
+input[type="file"] {
+  color: var(--text);
+}
+
 button {
-  padding: 10px 16px;
+  background: #2563eb;
+  color: #fff;
   border: none;
-  background: #007bff;
-  color: white;
-  border-radius: 4px;
+  padding: 10px 16px;
+  border-radius: 6px;
   cursor: pointer;
 }
-button:hover {
-  background: #0056b3;
-}
+button:hover { background:#1d4ed8; }
+
 .actions {
-  margin-top: 15px;
   display: flex;
   gap: 10px;
   justify-content: center;
   flex-wrap: wrap;
+  margin-top: 10px;
 }
-.painel {
+
+.kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(220px,1fr));
+  gap: 12px;
   margin: 20px 0;
 }
-.card {
-  background: #2c3e50;
-  color: white;
-  padding: 14px;
-  border-radius: 6px;
+
+.kpi {
+  background: var(--card);
+  border-radius: 8px;
+  padding: 18px;
   text-align: center;
+  box-shadow: 0 0 0 1px var(--border);
 }
-.card span {
+
+.kpi span {
   display: block;
-  font-size: 20px;
+  font-size: 28px;
   font-weight: bold;
+  color: var(--accent);
 }
-.card.total {
-  background: #27ae60;
+
+.graficos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px,1fr));
+  gap: 20px;
+}
+
+.chart-box {
+  background: var(--card);
+  border-radius: 8px;
+  padding: 14px;
+  box-shadow: 0 0 0 1px var(--border);
 }
 </style>
 </head>
@@ -74,215 +109,165 @@ button:hover {
 <body>
 <div class="container">
 
-<h1>📊 Análise de Cancelamentos</h1>
+<h1>📊 Dashboard de Cancelamentos</h1>
 
-<h3>Cancelamentos por Lote e Valor</h3>
-<div id="painelLoteValor" class="painel"></div>
+<div class="kpis">
+  <div class="kpi">Itens Cancelados<span id="kpiItens">0</span></div>
+  <div class="kpi">Total Perdido<span id="kpiValor">R$ 0,00</span></div>
+  <div class="kpi">Lotes Afetados<span id="kpiLotes">0</span></div>
+</div>
 
-<h3>Impacto Financeiro dos Cancelamentos</h3>
-<div id="painelFinanceiro" class="painel"></div>
+<div class="graficos">
+  <div class="chart-box"><canvas id="graficoQtdLote"></canvas></div>
+  <div class="chart-box"><canvas id="graficoValorLote"></canvas></div>
+  <div class="chart-box"><canvas id="graficoValor"></canvas></div>
+  <div class="chart-box"><canvas id="graficoData"></canvas></div>
+</div>
+
+<br>
 
 <input type="file" id="arquivo"><br><br>
 <textarea id="input" placeholder="Cole a base aqui..."></textarea>
 
 <div class="actions">
   <button onclick="processar()">Processar</button>
-  <button onclick="baixarCSV()">Baixar CSV</button>
-  <button onclick="baixarExcel()">Baixar Excel (.XLSX)</button>
+  <button onclick="baixarCSV()">CSV</button>
+  <button onclick="baixarExcel()">Excel</button>
 </div>
 
 </div>
 
 <script>
-/* ================= UTILIDADES ================= */
+/* ================= VARIÁVEIS ================= */
+let csvFinal=[];
+let totalItens=0, totalFinanceiro=0;
+let qtdPorLote={}, valorPorLote={}, qtdPorValor={}, qtdPorData={};
+let charts=[];
 
-function formatarMoeda(valor) {
-  return valor.toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
+/* ================= UTIL ================= */
+function formatarMoeda(v){
+  return v.toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 }
-
-function detectarSeparador(l) {
-  if (l.includes("\t")) return "\t";
-  if (l.includes(";")) return ";";
+function detectarSeparador(l){
+  if(l.includes("\t")) return "\t";
+  if(l.includes(";")) return ";";
   return ",";
 }
-
-function normalizarValor(v) {
-  return v.replace("R$", "").replace(/\./g, "").replace(",", ".").trim();
+function normalizarValor(v){
+  return v.replace("R$","").replace(/\./g,"").replace(",",".").trim();
 }
-
-function extrairDataCompra(codigo) {
-  if (!codigo) return "";
-  const limpo = codigo.replace(/\D/g, "");
-  for (let i = 0; i <= limpo.length - 8; i++) {
-    const ano = +limpo.substr(i, 4);
-    const mes = +limpo.substr(i + 4, 2);
-    const dia = +limpo.substr(i + 6, 2);
-    if (ano >= 2000 && ano <= 2099 && mes >= 1 && mes <= 12 && dia >= 1 && dia <= 31) {
-      return `${String(dia).padStart(2,"0")}/${String(mes).padStart(2,"0")}/${ano}`;
-    }
+function extrairDataCompra(c){
+  const n=c.replace(/\D/g,"");
+  for(let i=0;i<=n.length-8;i++){
+    const a=+n.substr(i,4),m=+n.substr(i+4,2),d=+n.substr(i+6,2);
+    if(a>=2000&&a<=2099&&m>=1&&m<=12&&d>=1&&d<=31)
+      return `${a}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
   }
-  return "";
+  return "Indefinida";
 }
-
-/* ================= VARIÁVEIS ================= */
-
-let csvFinal = [];
-let resumoLoteValor = {};
-let totalFinanceiro = 0;
-let totalItens = 0;
 
 /* ================= UPLOAD ================= */
-
-document.getElementById("arquivo").addEventListener("change", e => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const r = new FileReader();
-  r.onload = ev => document.getElementById("input").value = ev.target.result;
-  r.readAsText(file);
+document.getElementById("arquivo").addEventListener("change",e=>{
+  const f=e.target.files[0];
+  if(!f) return;
+  const r=new FileReader();
+  r.onload=ev=>document.getElementById("input").value=ev.target.result;
+  r.readAsText(f);
 });
 
 /* ================= PROCESSAR ================= */
+function processar(){
+  const texto=document.getElementById("input").value.trim();
+  if(!texto) return alert("Informe os dados");
 
-function processar() {
-  const texto = document.getElementById("input").value.trim();
-  if (!texto) return alert("Informe os dados.");
+  const linhas=texto.split(/\r?\n/);
+  const sep=detectarSeparador(linhas[0]);
 
-  const linhas = texto.split(/\r?\n/);
-  const sep = detectarSeparador(linhas[0]);
+  csvFinal=[["Data_Compra","Codigo","Lote","Valor"]];
+  totalItens=0; totalFinanceiro=0;
+  qtdPorLote={}; valorPorLote={}; qtdPorValor={}; qtdPorData={};
 
-  csvFinal = [["Data_Compra","Data_Cancelamento","Codigo_Original","Lote","Valor"]];
-  resumoLoteValor = {};
-  totalFinanceiro = 0;
-  totalItens = 0;
+  linhas.forEach(l=>{
+    if(!l.trim()) return;
+    const c=l.split(sep);
 
-  linhas.forEach(linha => {
-    if (!linha.trim()) return;
-    const cols = linha.split(sep);
-
-    let valor = null;
-    for (let i = cols.length - 1; i >= 0; i--) {
-      const v = normalizarValor(cols[i]);
-      if (/^\d+(\.\d{1,2})?$/.test(v)) {
-        valor = parseFloat(v);
-        break;
-      }
+    let valor=null;
+    for(let i=c.length-1;i>=0;i--){
+      const v=normalizarValor(c[i]);
+      if(/^\d+(\.\d{1,2})?$/.test(v)){ valor=parseFloat(v); break; }
     }
-    if (!valor || isNaN(valor) || valor === 0) return;
+    if(!valor || valor===0) return;
 
-    let codigo = "";
-    cols.forEach(c => {
-      const num = c.replace(/\D/g, "");
-      if (num.length >= 8 && num.length > codigo.length) codigo = num;
+    let codigo="";
+    c.forEach(x=>{
+      const n=x.replace(/\D/g,"");
+      if(n.length>codigo.length) codigo=n;
     });
 
-    let lote = "";
-    cols.forEach(c => {
-      if (/lote/i.test(c)) lote = c.trim();
-    });
+    let lote="";
+    c.forEach(x=>{ if(/lote/i.test(x)) lote=x.trim(); });
 
-    const dataCompra = extrairDataCompra(codigo);
-    let dataCancel = "";
-    cols.forEach(c => {
-      if (/\d{2}\/\d{2}\/\d{4}/.test(c)) dataCancel = c.substring(0,10);
-    });
+    const data=extrairDataCompra(codigo);
 
-    csvFinal.push([dataCompra, dataCancel, codigo, lote, valor]);
+    csvFinal.push([data,codigo,lote,valor]);
 
-    const chave = `${lote} | ${formatarMoeda(valor)}`;
-    resumoLoteValor[chave] = (resumoLoteValor[chave] || 0) + 1;
+    qtdPorLote[lote]=(qtdPorLote[lote]||0)+1;
+    valorPorLote[lote]=(valorPorLote[lote]||0)+valor;
+    qtdPorValor[valor]=(qtdPorValor[valor]||0)+1;
+    qtdPorData[data]=(qtdPorData[data]||0)+1;
 
-    totalFinanceiro += valor;
     totalItens++;
+    totalFinanceiro+=valor;
   });
 
-  montarPainel();
+  atualizarDashboard();
 }
 
-/* ================= PAINÉIS ================= */
+/* ================= DASHBOARD ================= */
+function atualizarDashboard(){
+  document.getElementById("kpiItens").innerText=totalItens;
+  document.getElementById("kpiValor").innerText=formatarMoeda(totalFinanceiro);
+  document.getElementById("kpiLotes").innerText=Object.keys(qtdPorLote).length;
 
-function montarPainel() {
-  const painel = document.getElementById("painelLoteValor");
-  painel.innerHTML = "";
-  Object.keys(resumoLoteValor).forEach(k => {
-    painel.innerHTML += `
-      <div class="card">
-        ${k}
-        <span>${resumoLoteValor[k]} cancelamentos</span>
-      </div>`;
-  });
+  charts.forEach(c=>c.destroy()); charts=[];
 
-  document.getElementById("painelFinanceiro").innerHTML = `
-    <div class="card total">
-      Itens cancelados
-      <span>${totalItens}</span>
-    </div>
-    <div class="card total">
-      Total financeiro perdido
-      <span>${formatarMoeda(totalFinanceiro)}</span>
-    </div>`;
+  charts.push(new Chart(graficoQtdLote,{
+    type:"bar",
+    data:{labels:Object.keys(qtdPorLote),datasets:[{data:Object.values(qtdPorLote),backgroundColor:"#38bdf8"}]},
+    options:{plugins:{legend:{display:false}}}
+  }));
+
+  charts.push(new Chart(graficoValorLote,{
+    type:"bar",
+    data:{labels:Object.keys(valorPorLote),datasets:[{data:Object.values(valorPorLote),backgroundColor:"#22c55e"}]},
+    options:{plugins:{legend:{display:false}}}
+  }));
+
+  charts.push(new Chart(graficoValor,{
+    type:"pie",
+    data:{labels:Object.keys(qtdPorValor),datasets:[{data:Object.values(qtdPorValor)}]}
+  }));
+
+  charts.push(new Chart(graficoData,{
+    type:"line",
+    data:{labels:Object.keys(qtdPorData),datasets:[{data:Object.values(qtdPorData),borderColor:"#facc15"}]}
+  }));
 }
 
-/* ================= CSV ================= */
-
-function baixarCSV() {
-  if (csvFinal.length <= 1) return alert("Nada processado.");
-  const csv = csvFinal.map(l => l.join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "cancelamentos_analise.csv";
+/* ================= EXPORT ================= */
+function baixarCSV(){
+  const csv=csvFinal.map(l=>l.join(",")).join("\n");
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  a.download="cancelamentos.csv";
   a.click();
-  URL.revokeObjectURL(url);
 }
 
-/* ================= EXCEL ================= */
-
-function baixarExcel() {
-  if (csvFinal.length <= 1) return alert("Nada processado.");
-
-  const dados = [...csvFinal];
-  dados.push(["","","","TOTAL",{ f:`SUM(E2:E${dados.length})` }]);
-
-  const dadosSheet = XLSX.utils.aoa_to_sheet(dados);
-  const rangeDados = XLSX.utils.decode_range(dadosSheet["!ref"]);
-  for (let r = 1; r <= rangeDados.e.r; r++) {
-    const cell = XLSX.utils.encode_cell({ r, c: 4 });
-    if (dadosSheet[cell]) dadosSheet[cell].z = '"R$" #,##0.00';
-  }
-
-  const resumo = [["Lote","Quantidade","Valor Unitário","Total Financeiro"]];
-  const controle = {};
-
-  Object.keys(resumoLoteValor).forEach(k => {
-    const [lote, valorTxt] = k.split(" | ");
-    const valor = parseFloat(valorTxt.replace("R$","").replace(".","").replace(",","."));
-    if (!controle[lote]) controle[lote] = { qtd:0, valor };
-    controle[lote].qtd += resumoLoteValor[k];
-  });
-
-  Object.keys(controle).forEach(lote => {
-    resumo.push([lote, controle[lote].qtd, controle[lote].valor, controle[lote].qtd * controle[lote].valor]);
-  });
-
-  const resumoSheet = XLSX.utils.aoa_to_sheet(resumo);
-  const rangeResumo = XLSX.utils.decode_range(resumoSheet["!ref"]);
-  for (let r = 1; r <= rangeResumo.e.r; r++) {
-    ["C","D"].forEach(col => {
-      const cell = col + (r + 1);
-      if (resumoSheet[cell]) resumoSheet[cell].z = '"R$" #,##0.00';
-    });
-  }
-
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, dadosSheet, "Dados");
-  XLSX.utils.book_append_sheet(wb, resumoSheet, "Resumo");
-  XLSX.writeFile(wb, "cancelamentos_dashboard.xlsx");
+function baixarExcel(){
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet(csvFinal);
+  XLSX.utils.book_append_sheet(wb,ws,"Dados");
+  XLSX.writeFile(wb,"dashboard_cancelamentos.xlsx");
 }
 </script>
 
